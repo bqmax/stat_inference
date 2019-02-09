@@ -1,0 +1,147 @@
+---
+title: "Statistical Inference Course Project"
+author: "Maksim Kuznetsov"
+date: "February 9, 2019"
+output: pdf_document
+---
+
+**Rmd source file is available on:** [GitHub]()
+
+```{r setup, include=FALSE, warning = F, message = F}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+library(tidyverse)
+library(latex2exp)
+library(kableExtra)
+```
+
+# A simulation exercise
+
+In this section, exponential distribution is explored in light of central limit theorem (CLT). The exponential distribution was simulated using the rate parameter $\lambda$ = 0.2.
+
+```{r}
+n <- 40; lambda <- 0.2
+mean_exp <- 1/lambda; std_dev <- 1/lambda
+```
+
+## Simulations
+
+10000 of random exponentials and 1000 of averages of 40 random exponentials were generated to demonstrate CLT in action and properties of the sample mean and sample variance.
+
+```{r}
+random_exp <- rexp(10000, lambda)
+mean_hat <- sapply(1:1000, function(i) mean(rexp(40, lambda)))
+biased_var <- sapply(1:1000, function(i) var(rexp(40, lambda)*39/40))
+unbiased_var <- sapply(1:1000, function(i) var(rexp(40, lambda)))
+```
+
+## Visualizations
+
+### Sample mean
+
+On Figure A we can see that the exponential distribution ($\lambda = 0.2$) is right-skewed (red vertical lines represent the mean $1/\lambda$) and of course the Figure B (QQ-plot) demonstrates pronounced discrepancy of sample quantiles from theoretical (standard normal) quantiles. But averages of 40 exponential have the distribution similar to the normal (see Figure C and D) and that distribution is approximately symmetric around the population mean (red lines). Green line (it is overlapped by line representing population mean) on Figure A represents the sample mean of 10000 of exponentials; blue line (it is overlapped by line representing population mean) on Figure C represents the sample mean of 1000 averages of 40 exponentials, and based on location of these lines we can assume that the sample mean is unbiased estimator of population mean (expectation of the sample mean equals the population mean).
+
+```{r}
+a <- ggplot()+
+    geom_histogram(aes(random_exp, ..density..), fill = 'wheat', colour = 'black')+
+    geom_vline(xintercept = mean_exp, colour = 'red')+
+    geom_vline(xintercept = mean(random_exp), colour = 'green')+
+    theme_bw()+ggtitle('Histogram of 10,000\nexponentials')+
+    theme(axis.title.x = element_blank())
+b <- ggplot()+
+    geom_qq(aes(sample = random_exp), colour = 'wheat', alpha = 0.7)+
+    geom_qq_line(aes(sample = random_exp), colour = 'grey')+
+    ggtitle('QQ-plot of 10,000\nexponentials')+
+    theme_bw()+coord_fixed(1/10)
+c <- ggplot()+
+    geom_histogram(aes(mean_hat, ..density..), fill = 'steelblue', colour = 'black')+
+    geom_vline(xintercept = mean(mean_exp), colour = 'blue')+
+    geom_vline(xintercept = mean_exp, colour = 'red')+
+    theme_bw()+ggtitle('Histogram of 1,000\naverages')+
+    theme(axis.title.x = element_blank())
+d <- ggplot()+
+    geom_qq(aes(sample = mean_hat), colour = 'steelblue', alpha = 0.7)+
+    geom_qq_line(aes(sample = mean_hat), colour = 'grey')+
+    ggtitle('QQ-plot of 1,000\naverages')+
+    theme_bw()+coord_fixed(1/10)
+ggpubr::ggarrange(a, b, c, d, ncol = 2, nrow =2,
+                       labels = c('A', 'B', 'C', 'D'), align = 'hv')
+```
+
+### Sample variance
+
+On Figure A we can see that the distribution sample biased variance (denominator equals sample size) is right-skewed (red vertical lines represent the population variances $1/\lambda$) and that the mean of sample variances is not overlapped by population variance. 
+On Figure B, we can see that the distribution sample unbiased variance (denominator equals sample size - 1) is right-skewed (red vertical lines represent the population variances $1/\lambda$) and the mean of sample variances is overlapped by population variance.
+
+```{r}
+a <- ggplot()+
+    geom_histogram(aes(biased_var, ..density..), fill = 'wheat', colour = 'black')+
+    geom_vline(xintercept = std_dev^2, colour = 'red')+
+    geom_vline(xintercept = mean(biased_var), colour = 'blue')+
+    theme_bw()+coord_fixed(3500)+
+    ggtitle('Distribution of 1000 biased\nsample variances')+
+    theme(axis.title.x = element_blank())
+b <- ggplot()+
+    geom_histogram(aes(biased_var, ..density..), fill = 'wheat', colour = 'black')+
+    geom_vline(xintercept = std_dev^2, colour = 'red')+
+    geom_vline(xintercept = mean(unbiased_var), colour = 'blue')+
+    theme_bw()+coord_fixed(3500)+
+    ggtitle('Distribution of 1000 unbiased\nsample variances')+
+    theme(axis.title.x = element_blank())
+ggpubr::ggarrange(a, b, ncol = 2, labels = c('A', 'B'), align = 'hv')
+```
+
+# Basic inferential data analysis
+
+Analisys was performed on `ToothGrowth` dataset.
+
+## Descriptive statistics
+
+Description of the response variable `len` by dose levels `dose` and delivery methods `supp`.
+
+```{r}
+data("ToothGrowth")
+desc <- ToothGrowth %>% 
+    group_by(dose, supp) %>% 
+    summarise(N = n(),
+              Mean = mean(len), SD = sd(len), SE = SD/sqrt(N),
+              `1st Quartile` = quantile(len, probs = 0.25), Median = median(len),
+              `3rd Quartile` = quantile(len, probs = 0.75))
+kable(desc, align = "l") %>% kable_styling(full_width = F)
+```
+
+## Exploratory analysis
+
+The exploration of response variable by dose levels and delivery methods showed that normality assumption can be violated and T test is not the best choice for that case but we will use it according to recommendations for the course project.
+
+```{r, fig.height=5, fig.width=6, fig.align='center'}
+ggplot(ToothGrowth, aes(supp, len, colour = supp))+
+    geom_jitter(width = 0.15, alpha = 0.2)+
+    geom_violin(alpha = 0)+
+    stat_summary(fun.data = 'mean_cl_boot', geom = 'point', size = 2)+
+    stat_summary(fun.data = 'mean_cl_boot', geom = 'errorbar', width = 0.1)+
+    theme_bw()+theme(legend.position = 'none')+
+    ggtitle('Sample distributions and\nbootstrped confidence intervals\nfor means in each group')+
+    facet_grid(. ~ dose)
+```
+
+## Inferential statistics
+
+T tests for unequal variances were used to compare means of the length of odontoblasts between two delivery methods for each dose levels of vitamin C (0.5, 1, and 2 mg/day). I think it is not a good idea to use a linear model to compare doses because dose levels is an ordered variable. To control family-wise error rate the Bonferroni correction was used.
+
+```{r}
+d <- ToothGrowth %>% 
+    group_by(dose) %>% 
+    do(tt = t.test(len ~ supp, data = .)) %>% 
+    mutate(`DF` = tt$parameter,
+           `T statistic` = tt$statistic,
+           `Lower limit` = tt$conf.int[1],
+           `Upper limit` = tt$conf.int[2],
+           `P value` = tt$p.value) %>% 
+    select(-2)
+d$`P[FWER]` <- p.adjust(d$`P value`, method = 'bonferroni')    
+kable(d, align = "l") %>% kable_styling(full_width = F) %>% 
+    add_header_above(c(" " = 3, "95% CI for the difference" = 2, " " = 2))
+```
+
+So using two-sided T test we can reject the null hypotheses (there are no differences between two groups) at $\alpha$ level 0.05 for 2 doses of vitamin C, but normality assumption may be violated.
+
